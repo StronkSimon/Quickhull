@@ -1,0 +1,37 @@
+packages: .
+
+with-compiler: ghc-9.4.8
+
+-- Always enable tests, so that the relevant dependencies get built etc.
+tests: True
+
+test-show-details: direct
+
+constraints:
+  -- (Only on WSL2) Uncomment the following line to enable debug mode in
+  -- Accelerate; this allows you to get info on what kernels are executed,
+  -- etc. This can sometimes give problems with building (due to building
+  -- Tracy).
+  -- accelerate +debug,
+
+  -- Whether to enable parallel CPU code. Use '+' for yes, '-' for no.
+  quickhull +llvm-cpu,
+
+  -- Whether to enable code for NVIDIA GPUs. Use '+' for yes, '-' for no. This
+  -- works only in WSL2, and even there it can be tricky to build.
+  -- If you'd like to try this on your own machine (preferably a native
+  -- Linux or macOS installation), ask one of the teachers.
+  quickhull -llvm-gpu
+
+source-repository-package
+  type: git
+  location: https://github.com/tomsmeding/accelerate-llvm
+  -- no-link-llvm
+  tag: 36e2184a9c4ab704bdae6b2317ae8e561174682c
+  subdir: accelerate-llvm accelerate-llvm-native
+
+source-repository-package
+  type: git
+  location: https://github.com/AccelerateHS/accelerate
+  -- b3cc-patches
+  tag: 14963dc2dda4cd9725b18f499da9a01fbfe68221
