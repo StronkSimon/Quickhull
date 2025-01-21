@@ -121,10 +121,26 @@ propagateR :: Elt a => Acc (Vector Bool) -> Acc (Vector a) -> Acc (Vector a)
 propagateR = error "TODO: propagateR"
 
 shiftHeadFlagsL :: Acc (Vector Bool) -> Acc (Vector Bool)
-shiftHeadFlagsL = error "TODO: shiftHeadFlagsL"
+shiftHeadFlagsL = stencil becomeRightNeighbour padWithTrue_
+  where
+    -- Assign the value of the right neighbor to the current position.
+    becomeRightNeighbour :: Stencil3 Bool -> Exp Bool
+    becomeRightNeighbour (_, _, r) = r
+
+    -- Pad boundaries with 'True' to ensure consistent behavior at the edges.
+    padWithTrue_ :: Boundary (Array DIM1 Bool)
+    padWithTrue_ = function $ const True_
 
 shiftHeadFlagsR :: Acc (Vector Bool) -> Acc (Vector Bool)
-shiftHeadFlagsR = error "TODO: shiftHeadFlagsR"
+shiftHeadFlagsR = stencil becomeLeftNeighbour padWithTrue_
+  where
+    -- Assign the value of the left neighbor to the current position.
+    becomeLeftNeighbour :: Stencil3 Bool -> Exp Bool
+    becomeLeftNeighbour (l, _, _) = l
+
+    -- Pad boundaries with 'True' to ensure consistent behavior at the edges.
+    padWithTrue_ :: Boundary (Array DIM1 Bool)
+    padWithTrue_ = function $ const True_
 
 segmentedScanl1 :: Elt a => (Exp a -> Exp a -> Exp a) -> Acc (Vector Bool) -> Acc (Vector a) -> Acc (Vector a)
 segmentedScanl1 f flags values =
