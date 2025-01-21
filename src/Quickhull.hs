@@ -59,34 +59,56 @@ type SegmentedPoints = (Vector Bool, Vector Point)
 initialPartition :: Acc (Vector Point) -> Acc SegmentedPoints
 initialPartition points =
   let
+      -- Locate the leftmost and rightmost points (p1 and p2)
       p1, p2 :: Exp Point
-      p1 = error "TODO: locate the left-most point"
-      p2 = error "TODO: locate the right-most point"
+      p1 = the $ minimum points
+      p2 = the $ maximum points
 
+      -- Determine which points are above the line (p1, p2)
       isUpper :: Acc (Vector Bool)
-      isUpper = error "TODO: determine which points lie above the line (p₁, p₂)"
+      isUpper = map (pointIsLeftOfLine (T2 p1 p2)) points
 
+      -- Determine which points are below the line (p1, p2)
       isLower :: Acc (Vector Bool)
-      isLower = error "TODO: determine which points lie below the line (p₁, p₂)"
+      isLower = map (pointIsRightOfLine (T2 p1 p2)) points
 
+      -- Number of points above and their relative indices
       offsetUpper :: Acc (Vector Int)
       countUpper  :: Acc (Scalar Int)
-      T2 offsetUpper countUpper = error "TODO: number of points above the line and their relative index"
+      T2 offsetUpper countUpper = scanl' (+) 0 (map boolToInt isUpper)
 
+      -- Number of points below and their relative indices
       offsetLower :: Acc (Vector Int)
       countLower  :: Acc (Scalar Int)
-      T2 offsetLower countLower = error "TODO: number of points below the line and their relative index"
+      T2 offsetLower countLower = scanl' (+) 0 (map boolToInt isLower)
 
+      -- Compute the index in the result array for each point
       destination :: Acc (Vector (Maybe DIM1))
-      destination = error "TODO: compute the index in the result array for each point (if it is present)"
+      destination = zipWith5 computeIndex points isUpper isLower offsetUpper offsetLower
+        where
+          computeIndex :: Exp Point -> Exp Bool -> Exp Bool -> Exp Int -> Exp Int -> Exp (Maybe DIM1)
+          computeIndex point isUp isLow offsetUp offsetLow =
+            let upIndex   = Just_ $ I1 $ 1 + offsetUp
+                lowIndex  = Just_ $ I1 $ 2 + the countUpper + offsetLow
+                point1Idx = Just_ $ I1 0
+                point2Idx = Just_ $ I1 $ 1 + the countUpper
+            in cond isUp upIndex $
+               cond isLow lowIndex $
+               cond (point == p1) point1Idx $
+               cond (point == p2) point2Idx $
+               Nothing_
 
+      -- Create the new points array
       newPoints :: Acc (Vector Point)
-      newPoints = error "TODO: place each point into its corresponding segment of the result"
+      newPoints = permute const result (destination !) points
+        where
+          result = generate (I1 arrsize) (const p1)
+          arrsize = the countUpper + the countLower + 3
 
+      -- Add p1 at the beginning and end of the array, and p2 after points above
       headFlags :: Acc (Vector Bool)
-      headFlags = error "TODO: create head flags array demarcating the initial segments"
-  in
-  T2 headFlags newPoints
+      headFlags = map (\x -> x == p1 || x == p2) newPoints 
+  in T2 headFlags newPoints
 
 
 -- The core of the algorithm processes all line segments at once in
@@ -183,6 +205,13 @@ pointIsLeftOfLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y > c
     ny = x2 - x1
     c  = nx * x1 + ny * y1
 
+pointIsRightOfLine :: Exp Line -> Exp Point -> Exp Bool
+pointIsRightOfLine (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y < c
+  where
+    nx = y1 - y2
+    ny = x2 - x1
+    c  = nx * x1 + ny * y1
+    
 nonNormalizedDistance :: Exp Line -> Exp Point -> Exp Int
 nonNormalizedDistance (T2 (T2 x1 y1) (T2 x2 y2)) (T2 x y) = nx * x + ny * y - c
   where
