@@ -115,10 +115,10 @@ quickhull =
 -- ----------------
 
 propagateL :: Elt a => Acc (Vector Bool) -> Acc (Vector a) -> Acc (Vector a)
-propagateL = error "TODO: propagateL"
+propagateL = segmentedScanl1 const
 
 propagateR :: Elt a => Acc (Vector Bool) -> Acc (Vector a) -> Acc (Vector a)
-propagateR = error "TODO: propagateR"
+propagateR = segmentedScanr1 (\_ v -> v)
 
 shiftHeadFlagsL :: Acc (Vector Bool) -> Acc (Vector Bool)
 shiftHeadFlagsL = stencil becomeRightNeighbour padWithTrue_
