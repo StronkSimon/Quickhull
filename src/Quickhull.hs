@@ -127,10 +127,34 @@ shiftHeadFlagsR :: Acc (Vector Bool) -> Acc (Vector Bool)
 shiftHeadFlagsR = error "TODO: shiftHeadFlagsR"
 
 segmentedScanl1 :: Elt a => (Exp a -> Exp a -> Exp a) -> Acc (Vector Bool) -> Acc (Vector a) -> Acc (Vector a)
-segmentedScanl1 = error "TODO: segmentedScanl1"
+segmentedScanl1 f flags values =
+  let
+    -- Combine flags and values into a single array of tuples
+    combined = zip flags values
+
+    -- Use scanl1 with the segmented helper function
+    scanned = scanl1
+      (\(T2 f1 v1) (T2 f2 v2) ->
+        T2 (f1 || f2) (f2 ? (v2, f v1 v2))
+      ) combined
+  in
+    -- Extract only the values from the scanned result
+    map snd scanned
 
 segmentedScanr1 :: Elt a => (Exp a -> Exp a -> Exp a) -> Acc (Vector Bool) -> Acc (Vector a) -> Acc (Vector a)
-segmentedScanr1 = error "TODO: segmentedScanr1"
+segmentedScanr1 f flags values =
+  let
+    -- Combine flags and values into a single array of tuples
+    combined = zip flags values
+
+    -- Use scanr1 with the segmented helper function
+    scanned = scanr1
+      (\(T2 f1 v1) (T2 f2 v2) ->
+        T2 (f1 || f2) (f1 ? (v1, f v1 v2))
+      ) combined
+  in
+    -- Extract only the values from the scanned result
+    map snd scanned
 
 
 -- Given utility functions
