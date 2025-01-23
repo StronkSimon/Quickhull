@@ -123,50 +123,75 @@ initialPartition points =
 partition :: Acc SegmentedPoints -> Acc SegmentedPoints
 partition (T2 headFlags points) =
   let
-    -- Determine the corresponding line for each point
-    p1 = propagateL headFlags points -- First boundary point of each segment
-    p2 = propagateR headFlags points -- Second boundary point of each segment
-    lineSegments = zip p1 p2         -- Line segment for each point
+    -- Propagate points left and right based on head flags
+    p1 = propagateL headFlags points
+    p2 = propagateR headFlags points
 
-    -- Find the furthest point from each line segment
-    distances = zipWith nonNormalizedDistance lineSegments points
-    furthestDistances = segmentedScanl1 max headFlags distances
+    -- Pair the propagated points to form lines
+    line = zip p1 p2
 
-    -- Identify which point is the furthest in each segment
-    isFurthest = zipWith (==) distances furthestDistances
+    -- Shift head flags to the left and right
+    headFlagsLeft = shiftHeadFlagsL headFlags
+    headFlagsRight = shiftHeadFlagsR headFlags
 
-    -- Update head flags to include the furthest point
-    updatedHeadFlags = zipWith (||) headFlags isFurthest
+    -- Calculate distances of points from their respective lines
+    zippedPoints = zipWith (\line point -> T2 (nonNormalizedDistance line point) point) line points
 
-    -- Get the furthest point for each segment
-    furthestPoint = propagateL isFurthest points
+    -- Get the furthest points within each segment
+    getFurthestPoints = map snd $ segmentedScanl1 P.max headFlagsRight zippedPoints
 
-    -- Create new lines using the furthest point for partitioning
-    leftLines = zip p1 furthestPoint
-    rightLines = zip furthestPoint p2
+    -- Propagate furthest points to the right
+    p3 = propagateR headFlagsLeft getFurthestPoints
 
-    -- Classify points relative to the new line segments
-    leftSegment = zipWith pointIsLeftOfLine leftLines points
-    rightSegment = zipWith pointIsRightOfLine rightLines points
+    -- Determine points to the left and right of their respective lines
+    isLeft = zipWith3 (\(T2 p1 p2) point p3 -> pointIsLeftOfLine (T2 p1 p3) point) line points p3
+    isRight = zipWith3 (\(T2 p1 p2) point p3 -> pointIsRightOfLine (T2 p2 p3) point) line points p3
 
-    -- Define a destination function for permute
-    destination :: Exp DIM1 -> Exp (Maybe DIM1)
-    destination ix =
-      let
-        headFlag = updatedHeadFlags ! ix
-        isLeft   = leftSegment ! ix
-        isRight  = rightSegment ! ix
-      in
-        cond headFlag (Just_ ix) $
-        cond isLeft (Just_ ix) $
-        cond isRight (Just_ ix) $
-        Nothing_
+    -- Calculate segment indices for points on the left
+    segmentLeftIndex = segmentedScanl1 (+) headFlags (map boolToInt isLeft)
 
-    -- Create new points array using permute
-    newPoints = permute const points destination points
+    -- Propagate the number of left points to each segment
+    countLeft = propagateR headFlagsLeft segmentLeftIndex
 
+    -- Calculate segment indices for points on the right
+    segmentRightIndex = segmentedScanl1 (+) headFlags (map boolToInt isRight)
+
+    -- Calculate the total size of each segment
+    segmentTotalSize = zipWith4 
+      (\leftIndex rightIndex headFlag headFlagLeft -> headFlag ? (1, headFlagLeft ? (leftIndex + rightIndex + 1, 0))) 
+      segmentLeftIndex segmentRightIndex headFlags headFlagsLeft
+
+    -- Compute segment offsets and the total size of all segments
+    T2 segmentOffset size = scanl' (+) 0 segmentTotalSize
+
+    -- Determine the destination indices for each point
+    destination = zipWith9 
+      (\point p3 offsetLeft offsetRight offset flag left right countLeft -> 
+        flag ? (Just_ (I1 offset), 
+        (point == p3) ? (Just_ (I1 (offset + countLeft)), 
+        left ? (Just_ (I1 (offset + offsetLeft - 1)), 
+        right ? (Just_ (I1 (offset + offsetRight + countLeft)), 
+        Nothing_))))) 
+      points p3 segmentLeftIndex segmentRightIndex segmentOffset headFlags isLeft isRight countLeft
+
+    -- Create a default array of points initialized to (0, 0)
+    defaultArray = generate (I1 (the size)) (P.const (T2 0 0))
+
+    -- Create a default boolean array initialized to False
+    falseList = generate (I1 (length defaultArray)) (P.const False_)
+
+    -- Permute points into their new destinations, filling gaps with default values
+    newPoints = permute P.const defaultArray (destination !) points
+
+    -- Update head flags based on the new positions of points
+    newHeadFlags = zipWith3 
+      (\headFlag p3 newPoint -> headFlag ? (True_, (newPoint == p3) ? (True_, False_)))
+      (permute P.const falseList (destination !) headFlags) 
+      (permute P.const defaultArray (destination !) p3)
+      newPoints
   in
-    T2 updatedHeadFlags newPoints
+  -- Return the updated head flags and points as the result
+  T2 newHeadFlags newPoints
 
 -- The completed algorithm repeatedly partitions the points until there are
 -- no undecided points remaining. What remains is the convex hull.
