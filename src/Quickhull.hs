@@ -122,8 +122,51 @@ initialPartition points =
 --
 partition :: Acc SegmentedPoints -> Acc SegmentedPoints
 partition (T2 headFlags points) =
-  error "TODO: partition"
+  let
+    -- Determine the corresponding line for each point
+    p1 = propagateL headFlags points -- First boundary point of each segment
+    p2 = propagateR headFlags points -- Second boundary point of each segment
+    lineSegments = zip p1 p2         -- Line segment for each point
 
+    -- Find the furthest point from each line segment
+    distances = zipWith nonNormalizedDistance lineSegments points
+    furthestDistances = segmentedScanl1 max headFlags distances
+
+    -- Identify which point is the furthest in each segment
+    isFurthest = zipWith (==) distances furthestDistances
+
+    -- Update head flags to include the furthest point
+    updatedHeadFlags = zipWith (||) headFlags isFurthest
+
+    -- Get the furthest point for each segment
+    furthestPoint = propagateL isFurthest points
+
+    -- Create new lines using the furthest point for partitioning
+    leftLines = zip p1 furthestPoint
+    rightLines = zip furthestPoint p2
+
+    -- Classify points relative to the new line segments
+    leftSegment = zipWith pointIsLeftOfLine leftLines points
+    rightSegment = zipWith pointIsRightOfLine rightLines points
+
+    -- Define a destination function for permute
+    destination :: Exp DIM1 -> Exp (Maybe DIM1)
+    destination ix =
+      let
+        headFlag = updatedHeadFlags ! ix
+        isLeft   = leftSegment ! ix
+        isRight  = rightSegment ! ix
+      in
+        cond headFlag (Just_ ix) $
+        cond isLeft (Just_ ix) $
+        cond isRight (Just_ ix) $
+        Nothing_
+
+    -- Create new points array using permute
+    newPoints = permute const points destination points
+
+  in
+    T2 updatedHeadFlags newPoints
 
 -- The completed algorithm repeatedly partitions the points until there are
 -- no undecided points remaining. What remains is the convex hull.
