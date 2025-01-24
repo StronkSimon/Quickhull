@@ -197,9 +197,12 @@ partition (T2 headFlags points) =
 -- no undecided points remaining. What remains is the convex hull.
 --
 quickhull :: Acc (Vector Point) -> Acc (Vector Point)
-quickhull =
-  error "TODO: quickhull"
-
+quickhull points =
+  let iterateQuickhull state = 
+        let (T2 headflags result) = state
+        in any (/= True_) headflags
+      (T2 _ result) = awhile iterateQuickhull partition (initialPartition points)
+  in init result
 
 -- Helper functions
 -- ----------------
